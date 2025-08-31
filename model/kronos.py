@@ -573,7 +573,7 @@ def auto_regressive_inference(
             ran = trange
         else:
             ran = range
-        for i in ran(pred_len):
+        for i in ran(pred_len, leave=False, desc="Decoding"):
             current_seq_len = initial_seq_len + i
 
             if current_seq_len <= max_context:
