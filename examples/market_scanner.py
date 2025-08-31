@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import sys
 from plotly.subplots import make_subplots
 from torch.utils.data import Dataset
 from tqdm import tqdm
-import sys
 
 sys.path.append("../")
 
@@ -108,27 +108,31 @@ class Runner:
             model, tokenizer, device="cuda:0", max_context=512
         )
 
-    def run_scanner(self, split_date: str = "2025-08-20", return_period: int = 5):
+    def run_scanner(
+        self,
+    ):
+        test_date_end = pd.Timestamp("2025-08-29")
+        test_date_start = pd.Timestamp("2025-05-01")
+        test_day_range = pd.date_range(test_date_start, test_date_end)
 
-        split_date = pd.to_datetime(split_date)
+        choose_dates = test_day_range[::3]
         market_data = self.data
         eval_results = []
-        for i in tqdm(
-            range(len(market_data)), desc="scanning instruments", disable=True
-        ):
-            name, k_line = market_data[i]
-            train_df = k_line[k_line.index < split_date]
-            test_df = k_line[k_line.index >= split_date]
-            assert len(test_df) > return_period
+        for split_date in choose_dates:
 
-            eval_result = self.predict(name, train_df, test_df)
-            eval_result.update(
-                {"return_period": return_period, "test_date": split_date}
-            )
-            eval_results.append(eval_result)
+            for i in tqdm(
+                range(len(market_data)), desc="scanning instruments", disable=True
+            ):
+                name, k_line = market_data[i]
+                train_df = k_line[k_line.index < split_date]
+                test_df = k_line[k_line.index >= split_date]
 
-            if self.save_result_path is not None and (i + 1) % 30 == 0:
-                self._save_csv(eval_results, self.save_result_path)
+                eval_result = self.predict(name, train_df, test_df)
+                eval_result.update({"test_date": split_date})
+                eval_results.append(eval_result)
+
+                if self.save_result_path is not None and (i + 1) % 30 == 0:
+                    self._save_csv(eval_results, self.save_result_path)
 
         if self.save_result_path is not None:
             self._save_csv(eval_results, self.save_result_path)
@@ -145,8 +149,8 @@ class Runner:
         pred_df = self.predictor.predict(
             df=x_train,
             x_timestamp=x_timestamp,
-            y_timestamp=y_timestamp,
-            pred_len=len(test_df),
+            y_timestamp=y_timestamp.iloc[:8],
+            pred_len=8,
             T=1.0,
             top_p=0.9,
             sample_count=1,
@@ -172,9 +176,9 @@ class Runner:
         return tra_data, (x_timestamp, y_timestamp)
 
     def _compute_metrics(self, pred_df, test_df):
-        max_return_period = len(test_df)
+        max_return_period = min(len(test_df), 7)
         result_dict = {}
-        for return_period in range(1, max_return_period):
+        for return_period in range(1, max_return_period + 1):
 
             pred_return = (
                 pred_df.close.pct_change(periods=return_period)
@@ -258,4 +262,4 @@ class Runner:
 data = MarketData()
 print(f"Total instruments: {len(data)}")
 runner = Runner(data, save_result_path=Path("market_scan.csv"))
-scan_result = runner.run_scanner(split_date="2025-08-20", return_period=5)
+scan_result = runner.run_scanner()
