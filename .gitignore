@@ -74,3 +74,4 @@ venv.bak/
 *.temp
 temp/
 tmp/
+/scripts/signal_analysis_out/
