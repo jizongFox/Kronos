@@ -7,14 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import sys
 from plotly.subplots import make_subplots
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-sys.path.append("../")
-
-from model import KronosPredictor, KronosTokenizer, Kronos
+from kronos.model import KronosPredictor, KronosTokenizer, Kronos
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 

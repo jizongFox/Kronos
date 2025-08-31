@@ -114,11 +114,11 @@ def plot_prediction2(kline_df, pred_df, pred_std=None):
 
 
 # 1. Load Model and Tokenizer
-tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
+tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-2k")
 model = Kronos.from_pretrained("NeoQuasar/Kronos-mini")
 
 # 2. Instantiate Predictor
-predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=2048)
 
 # 3. Prepare Data
 # df = pd.read_csv("./data/XSHG_5min_600977.csv")
@@ -168,7 +168,7 @@ df2 = df2[["timestamps", "open", "high", "low", "close", "volume", "amount"]]
 
 df = df2
 
-lookback = 360
+lookback = 1000
 pred_len = 24
 df = df.iloc[-(lookback):, :]
 df.reset_index(drop=True, inplace=True)
@@ -186,7 +186,7 @@ y_timestamp = pd.Series(
 
 # 4. Make Prediction
 preds = []
-for _ in range(30):
+for _ in range(3):
     pred_df = predictor.predict(
         df=x_df,
         x_timestamp=x_timestamp,
@@ -211,4 +211,4 @@ print(pred_df.head())
 kline_df = df.loc[:lookback]
 
 # visualize
-plot_prediction2(kline_df, pred_df)
+plot_prediction2(kline_df, pred_df, pred_std=pred_std)
