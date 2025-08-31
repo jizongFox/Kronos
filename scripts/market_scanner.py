@@ -7,10 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from loguru import logger
 from plotly.subplots import make_subplots
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from loguru import logger
+
 from kronos.model import KronosPredictor, KronosTokenizer, Kronos
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -87,6 +88,7 @@ class Runner:
     def __init__(
         self,
         data: MarketData,
+        model_name: t.Literal["mini", "small", "base"] = "base",
         lookback: int = 512,
         pred_len: int = 120,
         save_result_path: Path | None = None,
@@ -97,12 +99,21 @@ class Runner:
         self.data = data
         self.save_result_path = save_result_path
         # 1. Load Model and Tokenizer
-        tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
-        model = Kronos.from_pretrained("NeoQuasar/Kronos-base")
+        if model_name == "mini":
+            tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-2k")
+            max_context = 2048
+
+        else:
+            tokenizer = KronosTokenizer.from_pretrained(
+                "NeoQuasar/Kronos-Tokenizer-base"
+            )
+            max_context = 512
+
+        model = Kronos.from_pretrained(f"NeoQuasar/Kronos-{model_name}")
 
         # 2. Instantiate Predictor
         self.predictor = KronosPredictor(
-            model, tokenizer, device="cuda:0", max_context=512
+            model, tokenizer, device="cuda", max_context=max_context
         )
 
     def run_scanner(
@@ -125,7 +136,9 @@ class Runner:
                 train_df = k_line[k_line.index < split_date]
                 test_df = k_line[k_line.index >= split_date]
                 if len(train_df) < 100:
-                    logger.debug(f"Instrument {name} has less than 100 training samples")
+                    logger.debug(
+                        f"Instrument {name} has less than 100 training samples"
+                    )
                     continue
 
                 eval_result = self.predict(name, train_df, test_df)

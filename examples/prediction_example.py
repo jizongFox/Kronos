@@ -1,9 +1,7 @@
-import pandas as pd
 import matplotlib.pyplot as plt
-import sys
+import pandas as pd
 
-sys.path.append("../")
-from model import Kronos, KronosTokenizer, KronosPredictor
+from kronos.model import Kronos, KronosTokenizer, KronosPredictor
 
 
 def plot_prediction(kline_df, pred_df):
@@ -45,21 +43,53 @@ def plot_prediction(kline_df, pred_df):
 
 # 1. Load Model and Tokenizer
 tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
-model = Kronos.from_pretrained("NeoQuasar/Kronos-small")
+model = Kronos.from_pretrained("NeoQuasar/Kronos-base")
 
 # 2. Instantiate Predictor
-predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=512)
+predictor = KronosPredictor(model, tokenizer, device="cuda:0", max_context=2048)
+#
 
-# 3. Prepare Data
-df = pd.read_csv("./data/XSHG_5min_600977.csv")
-df["timestamps"] = pd.to_datetime(df["timestamps"])
+import yfinance as yf
 
-lookback = 400
+df2 = yf.download(
+    "voo",
+    start="2020-07-23",
+    interval="1d",
+    auto_adjust=True,
+    progress=False,
+    multi_level_index=False,
+)
+assert df2.shape[0] > 0, "No data found."
+# Convert to target schema
+df2 = df2.rename(
+    columns={
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Volume": "volume",
+    }
+)
+# df2["volume"] = df2["volume"] / 10000000
+
+# timestamps as timezone-naive datetime64[ns] (convert to UTC if tz-aware)
+_idx = df2.index
+df2["timestamps"] = _idx
+
+# compute amount and reorder columns
+df2["amount"] = df2["close"] * df2["volume"]
+df2 = df2[["timestamps", "open", "high", "low", "close", "volume", "amount"]]
+df = df2
+df.reset_index(drop=True, inplace=True)
+lookback = 512
 pred_len = 120
 
-x_df = df.loc[: lookback - 1, ["open", "high", "low", "close", "volume", "amount"]]
-x_timestamp = df.loc[: lookback - 1, "timestamps"]
-y_timestamp = df.loc[lookback : lookback + pred_len - 1, "timestamps"]
+x_df = df.iloc[-(lookback + pred_len) : -pred_len]
+x_df = x_df.loc[:, ["open", "high", "low", "close", "volume", "amount"]]
+x_timestamp = df.iloc[-(lookback + pred_len) : -pred_len].loc[:, "timestamps"]
+# x_timestamp = df.loc[: lookback - 1, "timestamps"]
+y_timestamp = df.iloc[-(pred_len):].loc[:, "timestamps"]
+
 
 # 4. Make Prediction
 pred_df = predictor.predict(
@@ -78,7 +108,7 @@ print("Forecasted Data Head:")
 print(pred_df.head())
 
 # Combine historical and forecasted data for plotting
-kline_df = df.loc[: lookback + pred_len - 1]
+kline_df = x_df
 
 # visualize
 plot_prediction(kline_df, pred_df)
