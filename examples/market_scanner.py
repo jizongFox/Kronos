@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from torch.utils.data import Dataset
 from tqdm import tqdm
-
+from loguru import logger
 from kronos.model import KronosPredictor, KronosTokenizer, Kronos
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -44,7 +44,7 @@ class MarketData(Dataset[t.Tuple[str, pd.DataFrame]]):
         instruments = instruments[validate_mask]
 
         duration = instruments.end - instruments.start
-        validate_mask = duration.dt.days > 365
+        validate_mask = duration.dt.days > 400
         instruments = instruments[validate_mask]
 
         instruments["code"] = instruments.index
@@ -116,6 +116,7 @@ class Runner:
         market_data = self.data
         eval_results = []
         for split_date in choose_dates:
+            logger.info(f"Scanning instruments at {split_date}")
 
             for i in tqdm(
                 range(len(market_data)), desc="scanning instruments", disable=True
@@ -123,6 +124,9 @@ class Runner:
                 name, k_line = market_data[i]
                 train_df = k_line[k_line.index < split_date]
                 test_df = k_line[k_line.index >= split_date]
+                if len(train_df) < 100:
+                    logger.debug(f"Instrument {name} has less than 100 training samples")
+                    continue
 
                 eval_result = self.predict(name, train_df, test_df)
                 eval_result.update({"test_date": split_date})
